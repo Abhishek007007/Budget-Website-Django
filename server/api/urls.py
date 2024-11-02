@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views.main.main_views import IncomeSourceView, IncomeView, CategoryView, ExpenseView
+from .views.main.main_views import IncomeSourceView, IncomeView, CategoryView, ExpenseView, TransactionsView
 from .views.Auth.auth_view import UserRegistrationView, UserLoginView, LogoutView, PasswordChangeView
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -22,6 +22,6 @@ urlpatterns = [
 
     # Income AP
     
-    
+    path('transactions/', TransactionsView.as_view(), name='transactions'),
     path('finance/', include(router.urls)),
 ]

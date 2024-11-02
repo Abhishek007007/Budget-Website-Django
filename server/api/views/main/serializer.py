@@ -38,3 +38,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+class TransactionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    type = serializers.CharField()  
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    description = serializers.CharField()
+    date = serializers.DateTimeField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
