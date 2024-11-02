@@ -1,0 +1,48 @@
+| Endpoint                  | Method | Description                              |
+|---------------------------|--------|------------------------------------------|
+| `/api/v1/register/`       | POST   | Register a new user                      |
+| `/api/v1/login/`          | POST   | Log in a user and get JWT tokens         |
+| `/api/v1/token/refresh/`  | POST   | Refresh the JWT access token             |
+| `/api/v1/logout/`         | POST   | Log out the user and invalidate tokens   |
+| `/api/v1/password_change/`| POST   | Change the user password                 |
+
+
+
+| Endpoint                     | Method | Description                                       |
+|------------------------------|--------|---------------------------------------------------|
+| `/api/v1/finance/source/`    | GET    | List all income sources for the authenticated user|
+| `/api/v1/finance/source/`    | POST   | Create a new income source                        |
+| `/api/v1/finance/source/{id}/` | GET  | Retrieve details of a specific income source      |
+| `/api/v1/finance/source/{id}/` | PUT  | Update a specific income source                   |
+| `/api/v1/finance/source/{id}/` | DELETE | Delete a specific income source                  |
+
+
+
+| Endpoint                      | Method | Description                                     |
+|-------------------------------|--------|-------------------------------------------------|
+| `/api/v1/finance/income/`     | GET    | List all incomes for the authenticated user     |
+| `/api/v1/finance/income/`     | POST   | Create a new income entry                       |
+| `/api/v1/finance/income/{id}/` | GET   | Retrieve details of a specific income entry     |
+| `/api/v1/finance/income/{id}/` | PUT   | Update a specific income entry                  |
+| `/api/v1/finance/income/{id}/` | DELETE | Delete a specific income entry                 |
+
+
+
+| Endpoint                      | Method | Description                                    |
+|-------------------------------|--------|------------------------------------------------|
+| `/api/v1/finance/category/`   | GET    | List all categories for the authenticated user |
+| `/api/v1/finance/category/`   | POST   | Create a new category                          |
+| `/api/v1/finance/category/{id}/` | GET | Retrieve details of a specific category        |
+| `/api/v1/finance/category/{id}/` | PUT | Update a specific category                     |
+| `/api/v1/finance/category/{id}/` | DELETE | Delete a specific category                    |
+
+
+
+| Endpoint                      | Method | Description                                    |
+|-------------------------------|--------|------------------------------------------------|
+| `/api/v1/finance/expense/`    | GET    | List all expenses for the authenticated user   |
+| `/api/v1/finance/expense/`    | POST   | Create a new expense entry                     |
+| `/api/v1/finance/expense/{id}/` | GET  | Retrieve details of a specific expense entry   |
+| `/api/v1/finance/expense/{id}/` | PUT  | Update a specific expense entry                |
+| `/api/v1/finance/expense/{id}/` | DELETE | Delete a specific expense entry               |
+
