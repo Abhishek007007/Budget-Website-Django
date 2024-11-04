@@ -5,10 +5,8 @@ from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerila
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from itertools import chain
-from rest_framework import status
-from operator import attrgetter
-from django.db.models import F
-from datetime import datetime, date
+
+
 
 class IncomeSourceView(viewsets.ModelViewSet):
     queryset = IncomeSource.objects.all()
@@ -75,3 +73,4 @@ class TransactionsView(APIView):
         sorted_combined_data = sorted(combined_data, key=lambda x: x['created_at'])
 
         return Response(sorted_combined_data)
+    

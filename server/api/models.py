@@ -9,7 +9,7 @@ class IncomeSource(models.Model):
 
 class Income(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='income')
-    source = models.ForeignKey(IncomeSource, on_delete=models.CASCADE, related_name='incomes')  # Creates `source_id` column
+    source = models.ForeignKey(IncomeSource, on_delete=models.CASCADE, related_name='incomes')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField()
     date = models.DateField()
@@ -32,3 +32,15 @@ class Category(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+class FianacialGoals(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='financial_goals')
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    target_amount = models.DecimalField(decimal_places=2, max_digits=15, default=0.00)
+    current_amount = models.DecimalField(decimal_places=2, max_digits=15, default=0.00)
+    allocated_amount = models.DecimalField(decimal_places=2, max_digits=15, default=0.00)
+    target_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    
