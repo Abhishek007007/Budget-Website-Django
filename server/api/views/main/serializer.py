@@ -92,7 +92,7 @@ class AddMemberSerializer(serializers.Serializer):
     def save(self, group):
         username = self.validated_data['username']
         user = User.objects.get(username=username)
-        
+
         if GroupMember.objects.filter(group=group, user=user).exists():
             raise serializers.ValidationError("User is already a member of this group.")
         
@@ -105,7 +105,7 @@ class GroupMemberSerializer(serializers.ModelSerializer):
 
 class GroupSerializer(serializers.ModelSerializer):
     members = GroupMemberSerializer(many=True, read_only=True) 
-
+    
     class Meta:
         model = Group
         fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members']

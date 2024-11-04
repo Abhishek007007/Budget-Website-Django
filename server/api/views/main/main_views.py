@@ -108,6 +108,7 @@ class ManualContributionView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
+
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
@@ -119,18 +120,37 @@ class GroupViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(admin=self.request.user)
 
-    @action(detail=True, methods=['post'], url_path='add-member')
+    @action(detail=True, methods=['POST'], url_path='add-member')
     def add_member(self, request, pk=None):
         group = self.get_object()
         if group.admin != request.user:
             return Response({"error": "Only the group admin can add members."}, status=status.HTTP_403_FORBIDDEN)
-        
+
         serializer = AddMemberSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(group=group)
-            return Response({"status": "Member added successfully"})
+            return Response({"status": "Member added successfully"}, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['DELETE'], url_path='delete-member')
+    def delete_member(self, request, pk=None):
+        group = self.get_object()
+        if group.admin != request.user:
+            return Response({"error": "Only the group admin can delete members."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = AddMemberSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']  # Ensure this is 'username', not 'user'
+            try:
+                member = GroupMember.objects.get(group=group, user__username=username)  # Fetch the member in context of the group
+                member.delete()
+                return Response({'status': 'Member deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+            except GroupMember.DoesNotExist:
+                return Response({'error': 'User is not a member of this group!'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 

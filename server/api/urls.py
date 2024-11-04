@@ -23,7 +23,7 @@ urlpatterns = [
     path('password_change/', PasswordChangeView.as_view(), name='password_change'),
 
     # Income AP
-     path('goals/manual-contribution/', ManualContributionView.as_view(), name='manual-contribution'),
+    path('goals/manual-contribution/', ManualContributionView.as_view(), name='manual-contribution'),
     path('transactions/', TransactionsView.as_view(), name='transactions'),
     path('finance/', include(router.urls)),
 ]
