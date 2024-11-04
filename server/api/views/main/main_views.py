@@ -1,10 +1,11 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
-from ...models import IncomeSource, Income, Category, Expense
-from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, TransactionSerializer
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals
+from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from itertools import chain
+from rest_framework import status
 
 
 
@@ -25,7 +26,7 @@ class IncomeView(viewsets.ModelViewSet):
     serializer_class = IncomeSerializer
 
     def get_queryset(self):
-        return Income.objects.filter(user=self.request.user)  # Corrected to query Income
+        return Income.objects.filter(user=self.request.user)  
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -56,7 +57,7 @@ class ExpenseView(viewsets.ModelViewSet):
 class TransactionsView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request):
         incomes = Income.objects.filter(user=request.user).order_by('created_at')
         expenses = Expense.objects.filter(user=request.user).order_by('created_at')
 
@@ -73,4 +74,34 @@ class TransactionsView(APIView):
         sorted_combined_data = sorted(combined_data, key=lambda x: x['created_at'])
 
         return Response(sorted_combined_data)
-    
+
+class FinancialGoalView(viewsets.ModelViewSet):
+    queryset = FinancialGoals.objects.all()
+    serializer_class = FinancialGoalSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return FinancialGoals.objects.filter(user = self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user = self.request.user)
+
+class ManualContributionView(APIView):
+    def post(self, request):
+        serializer = ManualContributionSerializer(data=request.data)
+        if serializer.is_valid():
+            goal_id = serializer.validated_data['goal_id']
+            amount = serializer.validated_data['amount']
+            
+            try:
+                goal = FinancialGoals.objects.get(id=goal_id, user=request.user)
+            except FinancialGoals.DoesNotExist:
+                return Response({'error': 'Financial goal not found.'}, status=status.HTTP_404_NOT_FOUND)
+            
+            
+            goal.current_amount += amount
+            goal.save()
+
+            return Response({'success': True, 'current_amount': goal.current_amount}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

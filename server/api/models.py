@@ -32,7 +32,7 @@ class Category(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-class FianacialGoals(models.Model):
+class FinancialGoals(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='financial_goals')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -40,7 +40,12 @@ class FianacialGoals(models.Model):
     current_amount = models.DecimalField(decimal_places=2, max_digits=15, default=0.00)
     allocated_amount = models.DecimalField(decimal_places=2, max_digits=15, default=0.00)
     target_date = models.DateField()
+    recurrence = models.CharField(max_length=10, choices=[
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly')
+    ], blank=True)
+    income_source = models.ForeignKey(IncomeSource, on_delete=models.SET_NULL, null=True, blank=True, related_name='financial_goals')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    
