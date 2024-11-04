@@ -1,6 +1,8 @@
 from rest_framework import serializers
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember
 from datetime import date
+from django.contrib.auth.models import User
+
 class IncomeSourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = IncomeSource
@@ -76,3 +78,41 @@ class ManualContributionSerializer(serializers.Serializer):
         if attrs['amount'] <= 0:
             raise serializers.ValidationError("The amount must be greater than zero.")
         return attrs
+
+class AddMemberSerializer(serializers.Serializer):
+    username = serializers.CharField()
+
+    def validate_username(self, value):
+        try:
+            user = User.objects.get(username=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User does not exist.")
+        return value
+
+    def save(self, group):
+        username = self.validated_data['username']
+        user = User.objects.get(username=username)
+        
+        if GroupMember.objects.filter(group=group, user=user).exists():
+            raise serializers.ValidationError("User is already a member of this group.")
+        
+        GroupMember.objects.create(group=group, user=user)
+
+class GroupMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupMember
+        fields = ['id', 'user', 'joined_at'] 
+
+class GroupSerializer(serializers.ModelSerializer):
+    members = GroupMemberSerializer(many=True, read_only=True) 
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'admin']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        group = Group.objects.create(admin=user, **validated_data)
+        GroupMember.objects.create(group=group, user=user)  
+        return group

@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views.main.main_views import IncomeSourceView, IncomeView, CategoryView, ExpenseView, TransactionsView, FinancialGoalView, ManualContributionView
+from .views.main.main_views import IncomeSourceView, IncomeView, CategoryView, ExpenseView, TransactionsView, FinancialGoalView, ManualContributionView, GroupViewSet
 from .views.Auth.auth_view import UserRegistrationView, UserLoginView, LogoutView, PasswordChangeView
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -11,6 +11,7 @@ router.register(r'income',  IncomeView, basename='income')
 router.register(r'category', CategoryView, basename='catagory')
 router.register(r'expense', ExpenseView, basename='expense')
 router.register(r'goals', FinancialGoalView, basename='goals')
+router.register(r'group', GroupViewSet, basename='group')
 
 
 urlpatterns = [

@@ -1,11 +1,12 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals
-from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupMember
+from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer, GroupSerializer, AddMemberSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from itertools import chain
 from rest_framework import status
+from rest_framework.decorators import action
 
 
 
@@ -105,3 +106,34 @@ class ManualContributionView(APIView):
             return Response({'success': True, 'current_amount': goal.current_amount}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class GroupViewSet(viewsets.ModelViewSet):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Group.objects.filter(members__user=self.request.user).distinct()
+
+    def perform_create(self, serializer):
+        serializer.save(admin=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='add-member')
+    def add_member(self, request, pk=None):
+        group = self.get_object()
+        if group.admin != request.user:
+            return Response({"error": "Only the group admin can add members."}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = AddMemberSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(group=group)
+            return Response({"status": "Member added successfully"})
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+    
