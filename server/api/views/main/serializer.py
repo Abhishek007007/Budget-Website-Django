@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution
 from datetime import date
 from django.contrib.auth.models import User
 
@@ -10,7 +10,8 @@ class IncomeSourceSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 class IncomeSerializer(serializers.ModelSerializer):
-    source = serializers.PrimaryKeyRelatedField(queryset=IncomeSource.objects.all()) 
+    source = serializers.PrimaryKeyRelatedField(queryset=IncomeSource.objects.all())
+
     class Meta:
         model = Income
         fields = ['id', 'user', 'source', 'amount', 'description', 'date', 'created_at', 'updated_at']
@@ -19,6 +20,12 @@ class IncomeSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+    
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['source'] = IncomeSourceSerializer(instance.source).data  # Correctly reference 'source'
+        return representation
+
 
 class CatagorySerilaizer(serializers.ModelSerializer):
     class Meta:
@@ -32,14 +39,21 @@ class CatagorySerilaizer(serializers.ModelSerializer):
 
 class ExpenseSerializer(serializers.ModelSerializer):
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+
     class Meta:
         model = Expense
-        fields = ['id', 'user', 'category', 'amount', 'description', 'date', 'created_at' , 'updated_at']
+        fields = ['id', 'user', 'category', 'amount', 'description', 'date', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at', 'user']
 
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['category'] = CatagorySerilaizer(instance.category).data
+        return representation
+
 
 class TransactionSerializer(serializers.Serializer):
     id = serializers.IntegerField()
@@ -50,26 +64,6 @@ class TransactionSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
-class FinancialGoalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = FinancialGoals
-        fields = ['id', 'user', 'name', 'description', 'target_amount', 'current_amount', 'allocated_amount', 'target_date', 'recurrence', 'income_source', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'user']
-
-    def create(self, validated_data):
-        validated_data['user'] = self.context['request'].user
-        return super().create(validated_data)
-
-    def validate(self, attrs):
-        if attrs['target_amount'] < attrs['current_amount']:
-            raise serializers.ValidationError("Target amount cannot be less than the current amount.")
-        if attrs['allocated_amount'] < 0:
-            raise serializers.ValidationError("Allocated amount cannot be negative.")
-        if attrs['target_date'] < date.today():
-            raise serializers.ValidationError("Target date cannot be in the past.")
-        return attrs
-
-    
 class ManualContributionSerializer(serializers.Serializer):
     goal_id = serializers.IntegerField() 
     amount = serializers.DecimalField(max_digits=15, decimal_places=2)  
@@ -78,6 +72,40 @@ class ManualContributionSerializer(serializers.Serializer):
         if attrs['amount'] <= 0:
             raise serializers.ValidationError("The amount must be greater than zero.")
         return attrs
+
+class FinancialGoalContributionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FinancialGoalContribution
+        fields = ['id', 'goal', 'user', 'amount', 'date']
+        read_only_fields = ['id', 'goal', 'user', 'date']
+
+
+class FinancialGoalSerializer(serializers.ModelSerializer):
+    contributions = ManualContributionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = FinancialGoals
+        fields = [
+            'id', 'user', 'name', 'description', 
+            'target_amount', 'current_amount', 'allocated_amount', 
+            'target_date', 'recurrence', 'income_source', 
+            'created_at', 'updated_at', 'contributions'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'user', 'contributions']
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+
+    # No changes needed for the validate method here
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Retrieve contributions from the FinancialGoalContribution model
+        representation['contributions'] = FinancialGoalContributionSerializer(instance.contributions.all(), many=True).data
+        return representation
+
+
 
 class AddMemberSerializer(serializers.Serializer):
     username = serializers.CharField()
@@ -105,10 +133,77 @@ class GroupMemberSerializer(serializers.ModelSerializer):
 
 class GroupSerializer(serializers.ModelSerializer):
     members = GroupMemberSerializer(many=True, read_only=True) 
-    
+
     class Meta:
         model = Group
         fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'admin']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        group = Group.objects.create(admin=user, **validated_data)
+        GroupMember.objects.create(group=group, user=user)  
+        return group
+
+class GroupExpenseContributionSerializer(serializers.ModelSerializer):
+    expense_id = serializers.IntegerField(write_only=True)
+    group_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = GroupExpenseContribution
+        fields = ['id', 'expense_id', 'group_id', 'amount', 'date', 'user']
+        read_only_fields = ['user']
+
+    def create(self, validated_data):
+        expense_id = validated_data.pop('expense_id')
+        group_id = validated_data.pop('group_id')
+
+        # Fetch the GroupExpense instance
+        group_expense = GroupExpense.objects.get(id=expense_id, group_id=group_id)
+
+        # Create the contribution
+        contribution = GroupExpenseContribution.objects.create(
+            group_expense=group_expense,
+            user=self.context['request'].user,
+            **validated_data
+        )
+        return contribution
+
+
+class GroupExpenseSerializer(serializers.ModelSerializer):
+    contributions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GroupExpense
+        fields = ['id', 'group', 'user', 'title', 'amount', 'description', 'date', 'contributions']
+        read_only_fields = ['user']
+
+    def get_contributions(self, obj):
+        contributions = obj.contributions.all()
+        return GroupExpenseContributionSerializer(contributions, many=True).data
+
+class GroupFinancialGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupFinancialGoal
+        fields = ['id', 'group', 'name', 'target_amount', 'current_amount', 'target_date', 'created_at', 'updated_at', 'user']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+
+class GroupMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupMember
+        fields = ['id', 'user', 'joined_at']
+
+class GroupSerializer(serializers.ModelSerializer):
+    expenses = GroupExpenseSerializer(many=True, read_only=True)  
+    members = GroupMemberSerializer(many=True, read_only=True) 
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members', 'expenses']  
         read_only_fields = ['id', 'created_at', 'updated_at', 'admin']
 
     def create(self, validated_data):

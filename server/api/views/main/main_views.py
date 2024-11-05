@@ -1,14 +1,13 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupMember
-from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer, GroupSerializer, AddMemberSerializer
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupMember, GroupExpense, FinancialGoalContribution
+from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer, GroupSerializer, AddMemberSerializer, GroupExpenseSerializer, GroupExpenseContributionSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from itertools import chain
 from rest_framework import status
 from rest_framework.decorators import action
-
-
+from rest_framework import serializers
 
 class IncomeSourceView(viewsets.ModelViewSet):
     queryset = IncomeSource.objects.all()
@@ -30,6 +29,9 @@ class IncomeView(viewsets.ModelViewSet):
         return Income.objects.filter(user=self.request.user)  
 
     def perform_create(self, serializer):
+        source = serializer.validated_data.get('source')
+        if source.user != self.request.user:
+            raise serializers.ValidationError("You can only add income to your own sources.")
         serializer.save(user=self.request.user)
 
 
@@ -53,8 +55,12 @@ class ExpenseView(viewsets.ModelViewSet):
         return Expense.objects.filter(user = self.request.user)
     
     def perform_create(self, serializer):
+        category = serializer.validated_data.get('category')
+        if category.user != self.request.user:
+            raise serializers.ValidationError("You can only add expense to your own categories.")
         serializer.save(user = self.request.user)
     
+
 class TransactionsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -88,26 +94,30 @@ class FinancialGoalView(viewsets.ModelViewSet):
         serializer.save(user = self.request.user)
 
 class ManualContributionView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = ManualContributionSerializer(data=request.data)
         if serializer.is_valid():
             goal_id = serializer.validated_data['goal_id']
             amount = serializer.validated_data['amount']
-            
+
             try:
                 goal = FinancialGoals.objects.get(id=goal_id, user=request.user)
             except FinancialGoals.DoesNotExist:
                 return Response({'error': 'Financial goal not found.'}, status=status.HTTP_404_NOT_FOUND)
             
-            
+  
             goal.current_amount += amount
             goal.save()
+
+            FinancialGoalContribution.objects.create(goal=goal, user=request.user, amount=amount)
 
             return Response({'success': True, 'current_amount': goal.current_amount}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 
+    
 
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
@@ -118,7 +128,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         return Group.objects.filter(members__user=self.request.user).distinct()
 
     def perform_create(self, serializer):
-        serializer.save(admin=self.request.user)
+        serializer.save()
 
     @action(detail=True, methods=['POST'], url_path='add-member')
     def add_member(self, request, pk=None):
@@ -141,9 +151,9 @@ class GroupViewSet(viewsets.ModelViewSet):
 
         serializer = AddMemberSerializer(data=request.data)
         if serializer.is_valid():
-            username = serializer.validated_data['username']  # Ensure this is 'username', not 'user'
+            username = serializer.validated_data['username']  
             try:
-                member = GroupMember.objects.get(group=group, user__username=username)  # Fetch the member in context of the group
+                member = GroupMember.objects.get(group=group, user__username=username)  
                 member.delete()
                 return Response({'status': 'Member deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
             except GroupMember.DoesNotExist:
@@ -152,8 +162,29 @@ class GroupViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class GroupExpenseViewSet(viewsets.ModelViewSet):
+    serializer_class = GroupExpenseSerializer
+    permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return GroupExpense.objects.all()
 
+    def perform_create(self, serializer):
+        group_id = self.request.data.get('group')
+        if group_id:
+            try:
+                group = Group.objects.get(pk=group_id)
+                serializer.save(group=group, user=self.request.user)
+            except Group.DoesNotExist:
+                raise serializers.ValidationError({"error": "Group not found."})
+        else:
+            raise serializers.ValidationError({"error": "Group ID is required."})
 
+    @action(detail=True, methods=['post'], url_path='add-contribution')
+    def add_contribution(self, request, pk=None):
 
-    
+        serializer = GroupExpenseContributionSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save() 
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -50,6 +50,16 @@ class FinancialGoals(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class FinancialGoalContribution(models.Model):
+    goal = models.ForeignKey(FinancialGoals, on_delete=models.CASCADE, related_name='contributions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} contributed {self.amount} to {self.goal.name}"
+
+
 #Group
 
 class Group(models.Model):
@@ -74,12 +84,23 @@ class GroupMember(models.Model):
 class GroupExpense(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='expenses')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='group_expenses')
+    title = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField()
     date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.description} - {self.amount}"
+
+
+class GroupExpenseContribution(models.Model):
+    group_expense = models.ForeignKey(GroupExpense, on_delete=models.CASCADE, related_name='contributions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='contributions')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} contributed {self.amount} to {self.group_expense.title}"
 
 
 class GroupFinancialGoal(models.Model):
@@ -90,6 +111,7 @@ class GroupFinancialGoal(models.Model):
     target_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    user = models.ForeignKey(User, on_delete= models.CASCADE,null=True, blank=True)
 
     def __str__(self):
         return self.name

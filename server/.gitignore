@@ -1,0 +1,52 @@
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Django
+*.log
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static/
+*.pot
+*.py[cod]
+local_settings.py
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+*.env
+.env.local
+.env.production
+.env.development
+
+# Coverage reports
+.coverage
+htmlcov/
+*.cover
+
+# Backup files
+*~
+*.bak
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dbmypy.json
+
+# Other
+*.DS_Store
+Thumbs.db
