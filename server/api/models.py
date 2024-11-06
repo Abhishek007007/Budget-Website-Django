@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from datetime import date
 
 class IncomeSource(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incomesource')
@@ -116,3 +117,41 @@ class GroupFinancialGoal(models.Model):
     def __str__(self):
         return self.name
 
+
+class Budget(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budgets')
+    name = models.CharField(max_length=100)  # e.g., "Monthly Budget"
+    description = models.TextField(blank=True)
+    period = models.CharField(max_length=10, choices=[('daily', 'Daily'), ('weekly', 'Weekly'), ('monthly', 'Monthly')])
+    budget_limit = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_income = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_expenses = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_reset_date = models.DateField(default=date.today, blank=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.user.username}"
+
+    def calculate_balance(self):
+        return self.total_income - self.total_expenses
+
+    def add_income(self, amount):
+        self.total_income += amount
+        self.save()
+
+    def add_expense(self, amount):
+        self.total_expenses += amount
+        self.save()
+
+    def is_over_budget(self):
+        return self.total_expenses > self.budget_limit
+
+    def reset_budget(self):
+        self.total_income = 0
+        self.total_expenses = 0
+        self.save()
+
+    def update_reset_date(self):
+        self.last_reset_date = date.today()
+        self.save()

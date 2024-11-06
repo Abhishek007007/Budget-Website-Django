@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution, Budget
 from datetime import date
 from django.contrib.auth.models import User
 
@@ -211,3 +211,23 @@ class GroupSerializer(serializers.ModelSerializer):
         group = Group.objects.create(admin=user, **validated_data)
         GroupMember.objects.create(group=group, user=user)  
         return group
+
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    balance = serializers.SerializerMethodField()
+    is_over_budget = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Budget
+        fields = ['id', 'name', 'description', 'period', 'budget_limit', 'total_income', 'total_expenses', 'balance', 'is_over_budget', 'created_at', 'updated_at', 'last_reset_date']
+        read_only_fields = ['user', 'balance', 'is_over_budget', 'last_reset_date'] 
+
+    def get_balance(self, obj):
+        return obj.calculate_balance()
+
+    def get_is_over_budget(self, obj):
+        return obj.is_over_budget()
+
+    
+
