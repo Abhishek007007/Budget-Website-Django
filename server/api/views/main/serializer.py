@@ -126,24 +126,31 @@ class AddMemberSerializer(serializers.Serializer):
         
         GroupMember.objects.create(group=group, user=user)
 
+# Serializer for individual GroupMember, which includes username
 class GroupMemberSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GroupMember
-        fields = ['id', 'user', 'joined_at'] 
+    username = serializers.CharField(source='user.username')  # Fetching username from the related user
 
+    class Meta:
+        model = GroupMember  # The through model for the Many-to-Many relationship
+        fields = ['id', 'user', 'username', 'joined_at']  # Include user ID, username, and joined_at fields
+
+# Serializer for the Group, which includes the GroupMember information
 class GroupSerializer(serializers.ModelSerializer):
     members = GroupMemberSerializer(many=True, read_only=True) 
 
     class Meta:
-        model = Group
-        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members']
-        read_only_fields = ['id', 'created_at', 'updated_at', 'admin']
+        model = Group 
+        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members']  # Fields to be included
+        read_only_fields = ['id', 'created_at', 'updated_at', 'admin']  # Read-only fields
 
     def create(self, validated_data):
-        user = self.context['request'].user
-        group = Group.objects.create(admin=user, **validated_data)
-        GroupMember.objects.create(group=group, user=user)  
+        # Automatically assign the currently authenticated user as the group admin
+        user = self.context['request'].user  # Get the logged-in user
+        group = Group.objects.create(admin=user, **validated_data)  # Create the group instance
+        # Automatically create a GroupMember entry for the admin
+        GroupMember.objects.create(group=group, user=user)  # Add the admin as the first member
         return group
+
 
 class GroupExpenseContributionSerializer(serializers.ModelSerializer):
     expense_id = serializers.IntegerField(write_only=True)
