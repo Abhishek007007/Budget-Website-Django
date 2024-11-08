@@ -169,23 +169,22 @@ class GroupViewSet(viewsets.ModelViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['DELETE'], url_path='delete-member')
-    def delete_member(self, request, pk=None):
+    @action(detail=True, methods=['DELETE'], url_path='delete-member/(?P<username>[^/.]+)')
+    def delete_member(self, request, pk=None, username=None):
+        print(f"Username to delete: {username}")
         group = self.get_object()
+        
+        # Check if the user is the admin of the group
         if group.admin != request.user:
             return Response({"error": "Only the group admin can delete members."}, status=status.HTTP_403_FORBIDDEN)
-
-        serializer = AddMemberSerializer(data=request.data)
-        if serializer.is_valid():
-            username = serializer.validated_data['username']  
-            try:
-                member = GroupMember.objects.get(group=group, user__username=username)  
-                member.delete()
-                return Response({'status': 'Member deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
-            except GroupMember.DoesNotExist:
-                return Response({'error': 'User is not a member of this group!'}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Try to find the member to delete
+        try:
+            member = GroupMember.objects.get(group=group, user__username=username)
+            member.delete()
+            return Response({'status': 'Member deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except GroupMember.DoesNotExist:
+            return Response({'error': 'User is not a member of this group!'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class GroupExpenseViewSet(viewsets.ModelViewSet):
@@ -196,7 +195,9 @@ class GroupExpenseViewSet(viewsets.ModelViewSet):
         return GroupExpense.objects.all()
 
     def perform_create(self, serializer):
+        print(self.request.data)
         group_id = self.request.data.get('group')
+    
         if group_id:
             try:
                 group = Group.objects.get(pk=group_id)

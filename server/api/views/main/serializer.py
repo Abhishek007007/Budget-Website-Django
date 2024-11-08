@@ -126,31 +126,75 @@ class AddMemberSerializer(serializers.Serializer):
         
         GroupMember.objects.create(group=group, user=user)
 
-# Serializer for individual GroupMember, which includes username
+
+
 class GroupMemberSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')  # Fetching username from the related user
 
     class Meta:
-        model = GroupMember  # The through model for the Many-to-Many relationship
+        model = GroupMember
         fields = ['id', 'user', 'username', 'joined_at']  # Include user ID, username, and joined_at fields
-
-# Serializer for the Group, which includes the GroupMember information
-class GroupSerializer(serializers.ModelSerializer):
-    members = GroupMemberSerializer(many=True, read_only=True) 
+class GroupExpenseSerializer(serializers.ModelSerializer):
+    contributions = serializers.SerializerMethodField()
 
     class Meta:
-        model = Group 
-        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members']  # Fields to be included
-        read_only_fields = ['id', 'created_at', 'updated_at', 'admin']  # Read-only fields
+        model = GroupExpense
+        fields = ['id', 'group', 'user', 'title', 'amount', 'description', 'date', 'contributions']
+        read_only_fields = ['user']
+
+    def get_contributions(self, obj):
+        contributions = obj.contributions.all()
+        return GroupExpenseContributionSerializer(contributions, many=True).data
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Example: Add a custom field for total contributions
+        representation['total_contributions'] = sum(contrib.amount for contrib in instance.contributions.all())
+        return representation
+
+
+# Serializer for Group
+class GroupSerializer(serializers.ModelSerializer):
+    members = GroupMemberSerializer(many=True, read_only=True)  # Serialize the members, including their username
+    expenses = GroupExpenseSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members', 'expenses']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'admin', 'expenses']
 
     def create(self, validated_data):
         # Automatically assign the currently authenticated user as the group admin
-        user = self.context['request'].user  # Get the logged-in user
+        user = self.context['request'].user  # Get the logged-in user (admin)
         group = Group.objects.create(admin=user, **validated_data)  # Create the group instance
         # Automatically create a GroupMember entry for the admin
         GroupMember.objects.create(group=group, user=user)  # Add the admin as the first member
         return group
 
+    def to_representation(self, instance):
+        """
+        Override the to_representation method to customize how the members are represented.
+        This will ensure that the admin's username and all the group members' usernames are included in the response.
+        """
+        representation = super().to_representation(instance)
+        
+        # Custom representation for members
+        members_data = []
+        for member in instance.members.all():
+            member_data = {
+                'id': member.id,
+                'username': member.user.username,  # Get the username from the related User model
+                'joined_at': member.joined_at
+            }
+            members_data.append(member_data)
+        
+        # Add the custom members data to the representation
+        representation['members'] = members_data
+        
+        # Replace the admin field with the admin's username
+        representation['admin'] = instance.admin.username  # Replace admin ID with username
+        
+        return representation
 
 class GroupExpenseContributionSerializer(serializers.ModelSerializer):
     expense_id = serializers.IntegerField(write_only=True)
@@ -177,17 +221,6 @@ class GroupExpenseContributionSerializer(serializers.ModelSerializer):
         return contribution
 
 
-class GroupExpenseSerializer(serializers.ModelSerializer):
-    contributions = serializers.SerializerMethodField()
-
-    class Meta:
-        model = GroupExpense
-        fields = ['id', 'group', 'user', 'title', 'amount', 'description', 'date', 'contributions']
-        read_only_fields = ['user']
-
-    def get_contributions(self, obj):
-        contributions = obj.contributions.all()
-        return GroupExpenseContributionSerializer(contributions, many=True).data
 
 class GroupFinancialGoalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -198,27 +231,6 @@ class GroupFinancialGoalSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
-
-class GroupMemberSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GroupMember
-        fields = ['id', 'user', 'joined_at']
-
-class GroupSerializer(serializers.ModelSerializer):
-    expenses = GroupExpenseSerializer(many=True, read_only=True)  
-    members = GroupMemberSerializer(many=True, read_only=True) 
-
-    class Meta:
-        model = Group
-        fields = ['id', 'name', 'description', 'created_at', 'updated_at', 'admin', 'members', 'expenses']  
-        read_only_fields = ['id', 'created_at', 'updated_at', 'admin']
-
-    def create(self, validated_data):
-        user = self.context['request'].user
-        group = Group.objects.create(admin=user, **validated_data)
-        GroupMember.objects.create(group=group, user=user)  
-        return group
-
 
 
 class BudgetSerializer(serializers.ModelSerializer):
