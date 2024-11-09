@@ -8,8 +8,9 @@ from itertools import chain
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework import serializers
-
-
+from django.utils.timezone import localdate
+from decimal import Decimal
+from datetime import date
 from django.utils.timezone import localdate
 
 class IncomeSourceView(viewsets.ModelViewSet):
@@ -37,23 +38,28 @@ class CategoryView(viewsets.ModelViewSet):
         serializer.save(user = self.request.user)
 
 
-
 class IncomeView(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Income.objects.all()
     serializer_class = IncomeSerializer
 
     def get_queryset(self):
-        return Income.objects.filter(user=self.request.user)  
+        return Income.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
         source = serializer.validated_data.get('source')
         if source.user != self.request.user:
             raise serializers.ValidationError("You can only add income to your own sources.")
         
-        # Correct query to get budget
-        budget = Budget.objects.get(user=self.request.user)
-        
+        # Check if the user has a budget
+        try:
+            budget = Budget.objects.get(user=self.request.user)
+        except Budget.DoesNotExist:
+            # If no budget is found, just save the income without modifying the budget
+            serializer.save(user=self.request.user)
+            return
+
+        # If budget exists, update the total_income
         amount = serializer.validated_data.get('amount')  # Get amount from validated data
         budget.total_income += amount
         budget.save()
@@ -73,19 +79,58 @@ class ExpenseView(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         category = serializer.validated_data.get('category')
         if category.user != self.request.user:
-            raise serializers.ValidationError("You can only add expense to your own categories.")
+            raise serializers.ValidationError("You can only add expenses to your own categories.")
 
-        # Correct query to get budget
-        budget = Budget.objects.get(user=self.request.user)
+        # Check if the user has a budget
+        try:
+            budget = Budget.objects.get(user=self.request.user)
+        except Budget.DoesNotExist:
+            # If no budget is found, just save the expense without modifying the budget
+            serializer.save(user=self.request.user)
+            return
 
-        amount = serializer.validated_data.get('amount')  # Get amount from validated data
-        budget.total_expenses += amount
-        budget.save()
+        # Only update today's budget if the expense date is today
+        amount = serializer.validated_data.get('amount')
+        expense_date = serializer.validated_data.get('date', localdate())  # Default to today if date is not provided
+        if expense_date == localdate():
+            budget.total_expenses += Decimal(amount)
+            budget.save()
 
         # Save the expense after updating the budget
         serializer.save(user=self.request.user)
 
-    
+    def perform_update(self, serializer):
+        # Get the original expense amount and date before updating
+        original_expense = self.get_object()
+        original_amount = original_expense.amount
+        original_date = original_expense.date
+
+        # Update the expense
+        updated_expense = serializer.save(user=self.request.user)
+        new_amount = updated_expense.amount
+        new_date = updated_expense.date
+
+        # Adjust the budget only if the expense date matches today
+        budget = Budget.objects.get(user=self.request.user)
+        today = localdate()
+        
+        if original_date == today:
+            budget.total_expenses -= Decimal(original_amount)
+        if new_date == today:
+            budget.total_expenses += Decimal(new_amount)
+
+        budget.save()
+
+    def perform_destroy(self, instance):
+        # Adjust the budget's total expenses only if the expense date is today
+        budget = Budget.objects.get(user=self.request.user)
+        if instance.date == localdate():
+            budget.total_expenses -= Decimal(instance.amount)
+            budget.save()
+
+        # Delete the expense
+        instance.delete()
+
 
 class TransactionsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -108,16 +153,52 @@ class TransactionsView(APIView):
 
         return Response(sorted_combined_data)
 
+
+
 class FinancialGoalView(viewsets.ModelViewSet):
     queryset = FinancialGoals.objects.all()
     serializer_class = FinancialGoalSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return FinancialGoals.objects.filter(user = self.request.user)
+        return FinancialGoals.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user = self.request.user)
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        # Get the updated goal instance
+        goal = serializer.save(user=self.request.user)
+
+        # Get the contribution amount from the updated goal (use your logic to get this value)
+        contribution_amount = goal.current_amount  # Assuming current_amount is the contribution amount
+
+        # Check if the "Goals" category exists, otherwise create it
+        category, created = Category.objects.get_or_create(name="Goals", user=self.request.user)
+
+        # Prepare the expense data
+        expense_data = {
+            "user": self.request.user,
+            "amount": contribution_amount,  # Contribution as the expense amount
+            "date": date.today(),  # Set to today's date, can be customized
+            "category": category,  # Link the "Goals" category to this expense
+            "description": f"Contribution to Goal: {goal.name}",  # Description for the expense
+        }
+
+        # Create and save the expense
+        expense = Expense.objects.create(**expense_data)
+
+        # Optionally update the user's budget if necessary
+        try:
+            budget = Budget.objects.get(user=self.request.user)
+            budget.total_expenses += Decimal(contribution_amount)
+            budget.save()
+        except Budget.DoesNotExist:
+            pass  # Handle the case where the budget doesn't exist
+
+        # Return the updated financial goal data
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class ManualContributionView(APIView):
     permission_classes = [IsAuthenticated]
@@ -132,17 +213,38 @@ class ManualContributionView(APIView):
                 goal = FinancialGoals.objects.get(id=goal_id, user=request.user)
             except FinancialGoals.DoesNotExist:
                 return Response({'error': 'Financial goal not found.'}, status=status.HTTP_404_NOT_FOUND)
-            
-  
+
+            # Update the financial goal's current amount
             goal.current_amount += amount
             goal.save()
 
+            # Create a contribution record
             FinancialGoalContribution.objects.create(goal=goal, user=request.user, amount=amount)
+
+            # Create an expense record for the contribution
+            expense_data = {
+                "user": request.user,
+                "amount": amount,
+                "date": localdate(),  # Use today's date
+                "category": goal.category,  # Assuming the goal has a related category
+                "description": f"Contribution to Goal: {goal.name}",
+            }
+
+            # Create and save the expense
+            Expense.objects.create(**expense_data)
+
+            # Optionally update the user's budget if necessary
+            try:
+                budget = Budget.objects.get(user=request.user)
+                if expense_data["date"] == localdate():
+                    budget.total_expenses += Decimal(amount)
+                    budget.save()
+            except Budget.DoesNotExist:
+                pass  # If no budget exists, do nothing
 
             return Response({'success': True, 'current_amount': goal.current_amount}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -173,11 +275,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     def delete_member(self, request, pk=None, username=None):
         print(f"Username to delete: {username}")
         group = self.get_object()
-        
-        # Check if the user is the admin of the group
-        if group.admin != request.user:
-            return Response({"error": "Only the group admin can delete members."}, status=status.HTTP_403_FORBIDDEN)
-        
+       
         # Try to find the member to delete
         try:
             member = GroupMember.objects.get(group=group, user__username=username)

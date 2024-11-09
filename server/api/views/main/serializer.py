@@ -164,7 +164,6 @@ class GroupSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at', 'admin', 'expenses']
 
     def create(self, validated_data):
-        # Automatically assign the currently authenticated user as the group admin
         user = self.context['request'].user  # Get the logged-in user (admin)
         group = Group.objects.create(admin=user, **validated_data)  # Create the group instance
         # Automatically create a GroupMember entry for the admin
