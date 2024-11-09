@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution, Budget, BillReminder
+from ...models import GroupChat, GroupChatMessage, IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution, Budget, BillReminder
 from datetime import date
 from django.contrib.auth.models import User
 
@@ -231,6 +231,18 @@ class GroupFinancialGoalSerializer(serializers.ModelSerializer):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
 
+class GroupChatSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupChat
+        fields = ['id', 'group', 'created_at', 'updated_at']
+        read_only_fields = ['id',  'created_at', 'updated_at']
+
+
+class GroupChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupChatMessage
+        fields = ['id', 'group_chat','user', 'message', 'created_at', 'updated_at']
+        read_only_fields = ['id','group_chat', 'created_at', 'updated_at', 'user']
 
 class BudgetSerializer(serializers.ModelSerializer):
     balance = serializers.SerializerMethodField()

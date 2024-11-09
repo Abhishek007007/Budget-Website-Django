@@ -1,3 +1,4 @@
+from genericpath import exists
 from rest_framework import viewsets
 from rest_framework.response import Response
 from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupMember, GroupExpense, FinancialGoalContribution, Budget, BillReminder
@@ -12,6 +13,9 @@ from django.utils.timezone import localdate
 from decimal import Decimal
 from datetime import date
 from django.utils.timezone import localdate
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class IncomeSourceView(viewsets.ModelViewSet):
     queryset = IncomeSource.objects.all()
@@ -256,7 +260,9 @@ class GroupViewSet(viewsets.ModelViewSet):
         return Group.objects.filter(members__user=self.request.user).distinct()
 
     def perform_create(self, serializer):
-        serializer.save()
+        group = serializer.save()
+        GroupChat.objects.create(group=group)
+
 
     @action(detail=True, methods=['POST'], url_path='add-member')
     def add_member(self, request, pk=None):
@@ -314,6 +320,46 @@ class GroupExpenseViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from api.models import GroupChat, GroupChatMessage
+from api.views.main.serializer import GroupChatSerializer, GroupChatMessageSerializer
+from django.shortcuts import get_object_or_404
+
+class GroupChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        # Get the group chat by group ID
+        group_chat = get_object_or_404(GroupChat, group_id=group_id)
+
+        # Retrieve all messages in the group chat
+        messages = GroupChatMessage.objects.filter(group_chat=group_chat).order_by('created_at')
+        serializer = GroupChatMessageSerializer(messages, many=True)
+
+        for i in range(len(serializer.data)):
+            serializer.data[i]['username'] = User.objects.get(pk = serializer.data[i]['user']).username
+
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, group_id):
+        # Verify the group chat exists
+        group_chat = get_object_or_404(GroupChat, group_id=group_id)
+
+        # Check if the user is a member of the group
+
+        if not GroupMember.objects.filter(group_id = group_id, user_id = request.user).exists():
+            return Response({"detail": "User is not a member of the group."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create a new message in the group chat
+        serializer = GroupChatMessageSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(group_chat=group_chat, user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
