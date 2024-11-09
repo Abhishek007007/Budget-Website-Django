@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupMember, GroupExpense, FinancialGoalContribution, Budget
-from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer, GroupSerializer, AddMemberSerializer, GroupExpenseSerializer, GroupExpenseContributionSerializer, BudgetSerializer
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupMember, GroupExpense, FinancialGoalContribution, Budget, BillReminder
+from .serializer import IncomeSourceSerializer, IncomeSerializer, CatagorySerilaizer, ExpenseSerializer, FinancialGoalSerializer, ManualContributionSerializer, GroupSerializer, AddMemberSerializer, GroupExpenseSerializer, GroupExpenseContributionSerializer, BudgetSerializer, BillReminderSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from itertools import chain
@@ -360,3 +360,37 @@ class BudgetViewSet(viewsets.ModelViewSet):
         budget.total_income = 0
         budget.total_expenses = 0
         budget.save()
+
+
+
+from datetime import datetime
+
+
+class BillReminderViewSet(viewsets.ModelViewSet):
+    queryset = BillReminder.objects.all()
+    serializer_class = BillReminderSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['patch'])
+    def mark_paid(self, request, pk=None):
+        """
+        Marks the bill as paid and creates the next recurring bill for the following period.
+        """
+        bill = self.get_object()
+        current_date = datetime.now().date()
+
+        # Check if the bill is for the current month
+        if bill.due_date.month == current_date.month and bill.due_date.year == current_date.year:
+            bill.is_paid = True
+            bill.payment_date = current_date  # Set payment date
+            bill.save()
+
+            # Create the next recurring bill (if applicable)
+            if bill.recurring_interval != 'one_time':
+                bill.create_recurring_bill()
+
+            return Response({'status': 'Bill marked as paid for this month.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'You can only mark bills as paid for the current month.'}, status=status.HTTP_400_BAD_REQUEST)

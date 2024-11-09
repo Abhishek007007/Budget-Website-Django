@@ -155,3 +155,64 @@ class Budget(models.Model):
     def update_reset_date(self):
         self.last_reset_date = date.today()
         self.save()
+
+
+from datetime import timedelta
+
+
+class BillReminder(models.Model):
+
+    RECURRING_CHOICES = [
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+        ('weekly', 'Weekly'),
+        ('yearly', 'Yearly'),
+        ('one_time', 'One-Time'),
+    ]
+
+    bill_name = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    category = models.CharField(max_length=50)
+    due_date = models.DateField()  # Initial due date
+    recurring_interval = models.CharField(max_length=20, choices=RECURRING_CHOICES, default='monthly')
+    reminder_time = models.IntegerField(help_text="Time in days before due date to send reminder")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_paid = models.BooleanField(default=False)
+    payment_date = models.DateField(null=True, blank=True)  # Tracks when the bill was paid
+
+    def __str__(self):
+        return f"{self.bill_name} due on {self.due_date}"
+
+    def get_next_due_date(self):
+        """
+        Returns the next due date for the recurring bill based on the current due date and the recurring interval.
+        """
+        next_due_date = self.due_date
+        if self.recurring_interval == 'monthly':
+            next_due_date = next_due_date.replace(month=next_due_date.month % 12 + 1)
+        elif self.recurring_interval == 'quarterly':
+            next_due_date = next_due_date.replace(month=((next_due_date.month - 1) // 3 + 1) * 3 + 1)
+        elif self.recurring_interval == 'weekly':
+            next_due_date += timedelta(weeks=1)
+        elif self.recurring_interval == 'yearly':
+            next_due_date = next_due_date.replace(year=next_due_date.year + 1)
+        return next_due_date
+
+    def create_recurring_bill(self):
+        """
+        Creates a new recurring bill for the next due date without marking it as paid.
+        """
+        next_due_date = self.get_next_due_date()
+        BillReminder.objects.create(
+            user=self.user,
+            bill_name=self.bill_name,
+            amount=self.amount,
+            category=self.category,
+            due_date=next_due_date,
+            recurring_interval=self.recurring_interval,
+            reminder_time=self.reminder_time,
+            is_paid=False
+        )
+
+    class Meta:
+        ordering = ['due_date']

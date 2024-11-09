@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution, Budget
+from ...models import IncomeSource, Income, Category, Expense, FinancialGoals, Group, GroupExpense, GroupFinancialGoal, GroupMember, GroupExpenseContribution, FinancialGoalContribution, Budget, BillReminder
 from datetime import date
 from django.contrib.auth.models import User
 
@@ -249,3 +249,57 @@ class BudgetSerializer(serializers.ModelSerializer):
 
     
 
+class BillReminderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillReminder
+        fields = ['id', 'bill_name', 'amount', 'category', 'due_date', 'recurring_interval', 'reminder_time', 'user', 'is_paid', 'payment_date']
+        read_only_fields = ['id', 'user']
+
+    def update(self, instance, validated_data):
+        """
+        Override the update method to handle the case where the bill is being marked as paid
+        and create a new recurring bill if necessary.
+        """
+        if 'is_paid' in validated_data and validated_data['is_paid']:
+            # Mark the bill as paid
+            instance.is_paid = True
+            instance.payment_date = validated_data.get('payment_date', instance.payment_date)
+            instance.save()
+
+            # If it's a recurring bill, create the next bill
+            if instance.recurring_interval and instance.recurring_interval != 'one_time':
+                new_due_date = self.get_next_due_date(instance)
+                BillReminder.objects.create(
+                    bill_name=instance.bill_name,
+                    amount=instance.amount,
+                    category=instance.category,
+                    due_date=new_due_date,
+                    recurring_interval=instance.recurring_interval,
+                    reminder_time=instance.reminder_time,
+                    user=instance.user,
+                    is_paid=False  # New bill should not be paid
+                )
+
+        return super().update(instance, validated_data)
+
+    def get_next_due_date(self, instance):
+        """
+        Helper method to calculate the next due date based on the recurring interval.
+        """
+        from datetime import timedelta
+        import calendar
+
+        due_date = instance.due_date
+
+        if instance.recurring_interval == 'monthly':
+            # Move the date to the same day next month
+            next_month = due_date.replace(month=due_date.month % 12 + 1)
+            return next_month
+        elif instance.recurring_interval == 'weekly':
+            return due_date + timedelta(weeks=1)
+        elif instance.recurring_interval == 'yearly':
+            # Add one year to the due date
+            next_year = due_date.replace(year=due_date.year + 1)
+            return next_year
+        # Add more logic for other intervals if needed
+        return due_date
