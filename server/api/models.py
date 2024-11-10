@@ -117,6 +117,18 @@ class GroupFinancialGoal(models.Model):
     def __str__(self):
         return self.name
 
+class GroupChat(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='groupchat')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+class GroupChatMessage(models.Model):
+    group_chat = models.ForeignKey(GroupChat, on_delete=models.CASCADE, related_name='groupchatmessage')
+    user =models.ForeignKey(User, on_delete=models.CASCADE, related_name='group_chat')
+    message = models.CharField(max_length=122)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
 
 class Budget(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budgets')

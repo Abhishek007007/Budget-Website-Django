@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views.main.main_views import IncomeSourceView, IncomeView, CategoryView, ExpenseView, TransactionsView, FinancialGoalView, ManualContributionView, GroupViewSet, GroupExpenseViewSet, BudgetViewSet, BillReminderViewSet
+from .views.main.main_views import IncomeSourceView, IncomeView, CategoryView, ExpenseView, TransactionsView, FinancialGoalView, ManualContributionView, GroupViewSet, GroupExpenseViewSet, BudgetViewSet, BillReminderViewSet, GroupChatView
 from .views.Auth.auth_view import UserRegistrationView, UserLoginView, LogoutView, PasswordChangeView
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -31,5 +31,6 @@ urlpatterns = [
     # Income AP
     path('goals/manual-contribution/', ManualContributionView.as_view(), name='manual-contribution'),
     path('transactions/', TransactionsView.as_view(), name='transactions'),
+    path('groupchats/<int:group_id>/chat/', GroupChatView.as_view(), name='group-chat'),
     path('finance/', include(router.urls)),
 ]
